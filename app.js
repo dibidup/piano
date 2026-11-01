@@ -63,6 +63,47 @@ function openLib(n, lv) {
   LEVEL = CH.levels.some(L => L.n === lv) ? lv : CH.levels[0].n; PI = ALL.findIndex(p => p.lv === LEVEL); TR = 0; TPCT = 1; NOTES = null;
   chapterView(); window.scrollTo(0, 0);
 }
+// ---------------- más libros de la serie (solo en la biblioteca; sin avisos emergentes)
+const MORE_BOOKS = [
+  {id: 'drums', t: 'Drum Grooves for Every Style', d: '1,180 grooves and 152 fills in 35+ styles.', img: '61xa6mcngHL', asin: 'B0HP8SHVFF'},
+  {id: 'piano', t: 'Piano Grooves for Every Style', d: '508 patterns for both hands in 16 styles.', img: '71A6UwegwTL', asin: 'B0HPZWMLG2'},
+  {id: 'guitar', t: 'Guitar Grooves for Every Style', d: '527 guitar parts in notation and TAB, 16 styles.', img: '714mbPBKc5L', asin: 'B0HQ13N24B'},
+  {id: 'bass', t: 'Bass Grooves for Every Style', d: '523 bass lines in notation and TAB, with slap.', img: null, asin: null},
+  {id: 'read', t: 'Learn to Read Music in a Month', d: 'Read sheet music from scratch in 30 days.', img: '71qFEW194pL', asin: 'B0HP8NTHB8', asinIntl: 'B0HMX7DY9M'},
+  {id: 'harm', t: 'Teoría y armonía moderna para autodidactas', d: 'Spanish edition: harmony for self-taught musicians.', img: '61Ihk9-COfL', asin: 'B0HNP1JXXF', only: ['es']}
+];
+function amazonStore() {
+  let tz = '', lang = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  try { lang = (navigator.languages || [navigator.language]).join(',').toLowerCase(); } catch (e) {}
+  const TZ = {'Europe/Madrid': 'es', 'Atlantic/Canary': 'es', 'Africa/Ceuta': 'es', 'Europe/Berlin': 'de', 'Europe/Vienna': 'de', 'Europe/Zurich': 'de', 'Europe/Busingen': 'de',
+    'Europe/Paris': 'fr', 'Europe/Brussels': 'fr', 'Europe/Luxembourg': 'fr', 'Europe/Monaco': 'fr', 'Europe/Rome': 'it', 'Europe/San_Marino': 'it', 'Europe/Vatican': 'it',
+    'Europe/London': 'uk', 'Europe/Dublin': 'uk', 'Europe/Amsterdam': 'nl', 'Asia/Tokyo': 'jp'};
+  let s = TZ[tz];
+  if (!s && /^Australia\//.test(tz)) s = 'au';
+  if (!s && /^America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Montreal|Moncton|Whitehorse|Yellowknife|Iqaluit)$/.test(tz)) s = 'ca';
+  if (!s) { const m = lang.match(/\b(en-gb|en-ie|es-es|de|fr-fr|it|nl-nl|ja)\b/); s = m ? {'en-gb': 'uk', 'en-ie': 'uk', 'es-es': 'es', de: 'de', 'fr-fr': 'fr', it: 'it', 'nl-nl': 'nl', ja: 'jp'}[m[1]] : 'us'; }
+  const DOM = {us: 'amazon.com', uk: 'amazon.co.uk', es: 'amazon.es', de: 'amazon.de', fr: 'amazon.fr', it: 'amazon.it', nl: 'amazon.nl', jp: 'amazon.co.jp', ca: 'amazon.ca', au: 'amazon.com.au'};
+  return {s, dom: DOM[s]};
+}
+function moreBooks() {
+  const me = (typeof BOOK_ID !== 'undefined') ? BOOK_ID : MODE;
+  const st = amazonStore(), label = 'Amazon.' + st.dom.slice(7);
+  const items = MORE_BOOKS.filter(b => b.id !== me && b.asin && (!b.only || b.only.includes(st.s))).map(b => {
+    const asin = (b.asinIntl && st.s !== 'us' && st.s !== 'ca') ? b.asinIntl : b.asin;
+    const url = 'https://www.' + st.dom + '/dp/' + asin;
+    return `<div class="mb"><a class="mbc" href="${url}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${b.img ? `<img src="https://m.media-amazon.com/images/I/${b.img}._SL240_.jpg" alt="" loading="lazy" onerror="this.remove()">` : ''}</a><div class="mbt"><b>${esc(b.t)}</b><span>${esc(b.d)}</span><a class="btn mbb" href="${url}" target="_blank" rel="noopener" data-mb="${b.id}">View on ${label}</a></div></div>`;
+  }).join('');
+  if (!items) return '';
+  if (!document.getElementById('mbcss')) { const c = document.createElement('style'); c.id = 'mbcss';
+    c.textContent = '.more{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}.more summary{cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}.more summary::-webkit-details-marker{display:none}.more summary::after{content:"+";font:400 22px var(--body);color:var(--accent)}.more[open] summary::after{content:"−"}.more summary small{display:block;font-weight:400;color:var(--muted);font-size:13px}.mbl{display:grid;gap:10px;margin-top:10px}.mb{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg)}.mbc{flex:none;width:58px;height:75px;border-radius:3px;background:var(--cell);overflow:hidden}.mbc img{width:100%;height:100%;object-fit:cover;display:block}.mbt{display:grid;gap:3px;min-width:0}.mbt span{color:var(--muted);font-size:13.5px}.mbb{justify-self:start;margin-top:4px;padding:8px 14px;font-size:13px;text-decoration:none}';
+    document.head.appendChild(c); }
+  return `<details class="more"><summary><span>More books with this app<small>Same Groove Player, other instruments.</small></span></summary><div class="mbl">${items}</div></details>`;
+}
+function wireMoreBooks() {
+  document.querySelectorAll('[data-mb]').forEach(a => a.addEventListener('click', () => { try { if (typeof gcEvt === 'function') gcEvt(MODE + ': more books click ' + a.dataset.mb + ' ' + a.href.replace(/^https:\/\/www\./, '')); } catch (e) {} }));
+  const d = document.querySelector('details.more'); if (d) d.addEventListener('toggle', () => { try { if (d.open && typeof gcEvt === 'function') gcEvt(MODE + ': more books open'); } catch (e) {} });
+}
 function library() {
   stop(); CH = null;
   const chs = Object.values(LIB).sort((a, b) => (a.lib ? 999 : a.n) - (b.lib ? 999 : b.n));
@@ -71,8 +112,9 @@ function library() {
   const total = Object.keys(CHAPTERS).filter(k => k !== 'lib' && !(k.endsWith('2') && CHAPTERS[k.slice(0, -1)])).length;
   $('view').innerHTML = `<h2>Your library</h2>${items ? `<div class="list">${items}</div>` : ''}
     <div class="empty"><svg viewBox="0 0 24 24"><path d="M4 4h5v2H6v3H4V4zm11 0h5v5h-2V6h-3V4zM4 15h2v3h3v2H4v-5zm14 3v-3h2v5h-5v-2h3zM8 8h3v3H8V8zm5 0h3v3h-3V8zm-5 5h3v3H8v-3zm5 0h3v3h-3v-3z"/></svg>
-    <p class="muted">${Object.values(LIB).filter(c => !c.demo).length ? 'Add more chapters' : 'Add your first chapter'}: point your camera at the code on the <b>first page of any chapter</b> of the book, or tap <b>Scan a code</b>.<br>${Object.values(LIB).filter(c => !c.demo && !c.lib).length} of ${total} chapters added.</p></div>`;
+    <p class="muted">${Object.values(LIB).filter(c => !c.demo).length ? 'Add more chapters' : 'Add your first chapter'}: point your camera at the code on the <b>first page of any chapter</b> of the book, or tap <b>Scan a code</b>.<br>${Object.values(LIB).filter(c => !c.demo && !c.lib).length} of ${total} chapters added.</p></div>${moreBooks()}`;
   document.querySelectorAll('.chb').forEach(b => b.onclick = () => openLib(+b.dataset.n, 1));
+  wireMoreBooks();
 }
 function chapterView() { home(); }
 // ---------------- vistas

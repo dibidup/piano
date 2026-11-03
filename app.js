@@ -104,17 +104,44 @@ function wireMoreBooks() {
   document.querySelectorAll('[data-mb]').forEach(a => a.addEventListener('click', () => { try { if (typeof gcEvt === 'function') gcEvt(MODE + ': more books click ' + a.dataset.mb + ' ' + a.href.replace(/^https:\/\/www\./, '')); } catch (e) {} }));
   const d = document.querySelector('details.more'); if (d) d.addEventListener('toggle', () => { try { if (d.open && typeof gcEvt === 'function') gcEvt(MODE + ': more books open'); } catch (e) {} });
 }
+// ---------------- reseña en Amazon: fila fija en la biblioteca y tarjeta visible (una vez; «Not now» vuelve a las 2 semanas, máx. 3)
+const STAR = '<svg class="rstar" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg><i class="rsp a"></i><i class="rsp b"></i>';
+function rateSt() { let r = {}; try { r = JSON.parse(localStorage.getItem('dm-rate') || '{}'); } catch (e) {} if (!r.first) { r.first = Date.now(); rateSave(r); } return r; }
+function rateSave(r) { try { localStorage.setItem('dm-rate', JSON.stringify(r)); } catch (e) {} }
+function rateUrl() { const me = (typeof BOOK_ID !== 'undefined') ? BOOK_ID : MODE, b = MORE_BOOKS.find(x => x.id === me); if (!b || !b.asin) return null;
+  const st = amazonStore(), asin = (b.asinIntl && st.s !== 'us' && st.s !== 'ca') ? b.asinIntl : b.asin; return 'https://www.' + st.dom + '/review/create-review?asin=' + asin; }
+function rateCss() { if (document.getElementById('rtcss')) return; const c = document.createElement('style'); c.id = 'rtcss';
+  c.textContent = '@keyframes rshine{0%,100%{transform:scale(1) rotate(0);filter:drop-shadow(0 0 3px #ffd34d)}50%{transform:scale(1.12) rotate(8deg);filter:drop-shadow(0 0 10px #ffd34d)}}@keyframes rtw{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1) rotate(45deg)}}' +
+    '.rs{position:relative;width:46px;height:46px;flex:none;display:grid;place-items:center}.rstar{width:40px;height:40px;fill:#ffc83d;stroke:#fff3c4;stroke-width:.8;animation:rshine 2.4s ease-in-out infinite}' +
+    '.rsp{position:absolute;width:9px;height:9px;background:#fff3c4;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:rtw 2.4s ease-in-out infinite}.rsp.a{top:0;right:2px;animation-delay:.3s}.rsp.b{bottom:3px;left:0;animation-delay:1.2s}' +
+    '.rcard{border:1px solid var(--accent);border-radius:14px;padding:14px;background:var(--panel);display:grid;gap:12px;margin-bottom:6px}.rcard .rt{display:flex;gap:12px;align-items:flex-start}.rcard b{font:700 19px var(--display)}.rcard p{margin:3px 0 0;color:var(--muted);font-size:14px}' +
+    '.rcard .rb{display:flex;gap:8px;flex-wrap:wrap}.rcard .rb a{flex:1;justify-content:center;text-decoration:none;min-height:44px}.rcard .rb button{min-height:44px}.rrow{display:flex;gap:12px;align-items:center;margin-top:12px;border-top:1px solid var(--line);padding-top:12px;text-decoration:none;color:inherit}.rrow .rs{width:34px;height:34px}.rrow .rstar{width:28px;height:28px}.rrow span{display:grid;gap:2px}.rrow small{color:var(--muted)}';
+  document.head.appendChild(c); }
+function rateCard() { const url = rateUrl(); if (!url) return ''; const r = rateSt(); if (r.done && !/[?&]rate=1/.test(location.search)) return '';
+  const chs = Object.values(LIB).filter(c => !c.demo && !c.lib).length, days = (Date.now() - r.first) / 864e5;
+  const due = /[?&]rate=1/.test(location.search) || ((chs >= 3 || days >= 5) && (r.n || 0) < 3 && (!r.snooze || Date.now() > r.snooze));
+  if (!due) return ''; rateCss();
+  return `<div class="rcard" id="rcard"><div class="rt"><span class="rs">${STAR}</span><span><b>Enjoying the book?</b><p>Every review helps us keep making books and apps like this one. Thank you, we really appreciate it!</p></span></div>
+    <div class="rb"><a class="btn" id="rgo" href="${url}" target="_blank" rel="noopener">Write a review</a><button class="btn ghost" id="rno">Not now</button><button class="btn ghost" id="rdid">I already did</button></div></div>`; }
+function rateRow() { const url = rateUrl(); if (!url) return ''; rateCss(); return `<a class="rrow" id="rrow" href="${url}" target="_blank" rel="noopener"><span class="rs">${STAR}</span><span><b>Rate this book on Amazon</b><small>Every review helps us keep making books like this one.</small></span></a>`; }
+function wireRate() { const ev = t => { try { if (typeof gcEvt === 'function') gcEvt(MODE + ': review ' + t); } catch (e) {} };
+  const done = t => { const r = rateSt(); r.done = 1; rateSave(r); ev(t); const c = $('rcard'); if (c) c.remove(); };
+  const g = $('rgo'); if (g) g.addEventListener('click', () => done('click'));
+  const d = $('rdid'); if (d) d.onclick = () => done('already');
+  const no = $('rno'); if (no) no.onclick = () => { const r = rateSt(); r.n = (r.n || 0) + 1; r.snooze = Date.now() + 14 * 864e5; rateSave(r); ev('not now'); const c = $('rcard'); if (c) c.remove(); };
+  const w = $('rrow'); if (w) w.addEventListener('click', () => ev('menu click'));
+  if ($('rcard')) ev('card shown'); }
 function library() {
   stop(); CH = null;
   const chs = Object.values(LIB).sort((a, b) => (a.lib ? 999 : a.n) - (b.lib ? 999 : b.n));
   const items = chs.map(c => { const n = c.levels.reduce((a, L) => a + L.sections.reduce((x, S) => x + S.patterns.length, 0), 0);
     return `<button class="sec chb" data-n="${c.n}"><span class="sw l${c.lib ? 4 : 2}"></span><span><b>${c.lib ? '' : '<span class="n">' + c.n + '</span> '}${esc(c.title)}${c.demo ? ' <small class="demo">SAMPLE</small>' : ''}</b><span>${n} patterns${c.sub ? ' · ' + esc(c.sub) : ''}</span></span></button>`; }).join('');
   const total = Object.keys(CHAPTERS).filter(k => k !== 'lib' && !(k.endsWith('2') && CHAPTERS[k.slice(0, -1)])).length;
-  $('view').innerHTML = `<h2>Your library</h2>${items ? `<div class="list">${items}</div>` : ''}
+  $('view').innerHTML = `${rateCard()}<h2>Your library</h2>${items ? `<div class="list">${items}</div>` : ''}
     <div class="empty"><svg viewBox="0 0 24 24"><path d="M4 4h5v2H6v3H4V4zm11 0h5v5h-2V6h-3V4zM4 15h2v3h3v2H4v-5zm14 3v-3h2v5h-5v-2h3zM8 8h3v3H8V8zm5 0h3v3h-3V8zm-5 5h3v3H8v-3zm5 0h3v3h-3v-3z"/></svg>
-    <p class="muted">${Object.values(LIB).filter(c => !c.demo).length ? 'Add more chapters' : 'Add your first chapter'}: point your camera at the code on the <b>first page of any chapter</b> of the book, or tap <b>Scan a code</b>.<br>${Object.values(LIB).filter(c => !c.demo && !c.lib).length} of ${total} chapters added.</p></div>${moreBooks()}`;
+    <p class="muted">${Object.values(LIB).filter(c => !c.demo).length ? 'Add more chapters' : 'Add your first chapter'}: point your camera at the code on the <b>first page of any chapter</b> of the book, or tap <b>Scan a code</b>.<br>${Object.values(LIB).filter(c => !c.demo && !c.lib).length} of ${total} chapters added.</p></div>${moreBooks()}${rateRow()}`;
   document.querySelectorAll('.chb').forEach(b => b.onclick = () => openLib(+b.dataset.n, 1));
-  wireMoreBooks();
+  wireMoreBooks(); wireRate();
 }
 function chapterView() { home(); }
 // ---------------- vistas

@@ -618,7 +618,97 @@ if ('serviceWorker' in navigator && /^https:$/.test(location.protocol) && !/clau
 // guitarra: al girar el móvil, se recoloca la partitura (2 compases por línea en vertical)
 if (MODE !== 'bass') { let wasN = innerWidth < 700; addEventListener('resize', () => { const n = innerWidth < 700; if (n !== wasN && !playing && $('score')) { wasN = n; drawScore(); } }); }
 
-window.CAMSCAN_CFG = {onCode: t => handleCode(t)};
+window.ACT_CFG = {"book": "piano", "store": "pg-codes", "thumbs": "act/", "boxes": {"69": [71.5, 17.6, 11.0, 8.4], "80": [71.8, 17.6, 10.9, 8.4], "89": [71.6, 11.4, 11.0, 8.4], "99": [71.8, 11.4, 10.9, 8.4], "110": [71.6, 13.3, 11.0, 8.4], "120": [71.8, 11.4, 10.9, 8.4], "129": [71.6, 11.4, 11.0, 8.4], "137": [71.5, 11.4, 11.1, 8.5], "146": [71.6, 11.4, 11.0, 8.4], "155": [71.8, 17.6, 10.9, 8.4], "163": [71.8, 17.6, 10.9, 8.4], "171": [71.8, 17.6, 10.9, 8.4], "180": [71.8, 11.4, 10.9, 8.4], "189": [71.6, 17.6, 11.0, 8.4]}, "open": ["technique"], "ask": [{"sid": "blues", "ch": 5, "page": 69, "title": "Blues and Boogie-Woogie"}, {"sid": "neosoul", "ch": 6, "page": 80, "title": "Hip-Hop and Neo-Soul"}, {"sid": "gospel", "ch": 7, "page": 89, "title": "Gospel"}, {"sid": "jazz", "ch": 8, "page": 99, "title": "Jazz"}, {"sid": "nola", "ch": 9, "page": 110, "title": "New Orleans"}, {"sid": "country", "ch": 10, "page": 120, "title": "Country"}, {"sid": "reggae", "ch": 11, "page": 129, "title": "Reggae and Ska"}, {"sid": "afrocuban", "ch": 12, "page": 137, "title": "Afro-Cuban"}, {"sid": "brazil", "ch": 13, "page": 146, "title": "Brazilian"}, {"sid": "tango", "ch": 14, "page": 155, "title": "Tango and Latin Pop"}, {"sid": "afrobeat", "ch": 15, "page": 163, "title": "Afrobeat and Highlife"}, {"sid": "disco", "ch": 16, "page": 171, "title": "Disco, House and EDM"}, {"sid": "ballads", "ch": 17, "page": 180, "title": "Ballads"}, {"sid": "lefthand", "ch": 18, "page": 189, "title": "Left-Hand Patterns"}]};
+
+// ---------------- activación del libro (una sola vez por dispositivo) ----------------
+// El primer código fuera de la muestra no abre nada todavía: la app pide escanear (dentro de la app)
+// el código de una página concreta del libro, elegida al azar entre capítulos que no salen en la
+// vista previa de Amazon. Al escanearlo, se desbloquea todo. Quien ya tenía capítulos guardados
+// se da por activado, así que los clientes actuales no ven nada nuevo.
+(function () {
+  const A = window.ACT_CFG; if (!A) return;
+  const KEY = 'act-' + A.book, LS = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }};
+  const RE = A.re ? new RegExp(A.re) : /(?:PG1|BG1|GG1|UK1|FS1)\.(\w+)\.([\w-]{16,})(?:\.L(\d))?/;
+  const sidOf = t => { let u = t || ''; try { u = decodeURIComponent(u); } catch (e) {} const m = RE.exec(u); return m ? m[1] : null; };
+  let st = LS.get(KEY, null);
+  const free = sid => A.open.includes(sid);
+  if (!st) { let had = false;                                // ¿ya usaba la app con el libro? (códigos guardados que no son de la muestra)
+    try { const v = JSON.parse(localStorage.getItem(A.store) || '{}');
+      had = Array.isArray(v) ? v.some(t => { const s = sidOf(t); return !!s && !free(s); }) : Object.keys(v || {}).length > 0; } catch (e) {}
+    st = {done: had}; LS.set(KEY, st); }
+  let SRC = 'link';                                          // 'scan' solo cuando el código entra por el escáner de la app
+  window.ACT_SCANNED = t => { SRC = 'scan'; return handleCode(t, true); };
+  const fileIn = document.getElementById('cam');
+  if (fileIn) fileIn.addEventListener('change', () => { SRC = 'scan'; }, true);
+  const orig = handleCode;
+  handleCode = async function (txt, ...rest) {
+    const src = SRC; SRC = 'link';
+    const sid = sidOf(txt);
+    if (st.done || !sid || free(sid)) return orig(txt, ...rest);
+    // lectura: la página se pide de la misma edición (EE. UU. / Reino Unido) que el código abierto
+    if (!st.ask) { const pool = (A.pool && A.pools && A.pools[A.pool(sid)]) || A.ask; st.ask = pool[Math.floor(Math.random() * pool.length)]; LS.set(KEY, st); }
+    if (src === 'scan' && sid === st.ask.sid) {              // código pedido, escaneado con el libro delante
+      st.done = true; LS.set(KEY, st); close();
+      const pend = st.pending || []; delete st.pending; LS.set(KEY, st);
+      for (const p of pend) if (sidOf(p) !== sid) { try { await orig(p, true); } catch (e) {} }
+      const ok = await orig(txt, ...rest); toast('Your book is activated. Enjoy!'); return ok;
+    }
+    if (sid !== st.ask.sid || src !== 'scan') { const p = st.pending || []; if (!p.some(x => sidOf(x) === sid)) p.push(txt); st.pending = p.slice(-6); LS.set(KEY, st); }
+    const wrong = src === 'scan' && sid !== st.ask.sid && !!st.shown; st.shown = true; LS.set(KEY, st); show(wrong); return false;
+  };
+  let ov = null;
+  function close() { if (ov) { ov.remove(); ov = null; } }
+  function show(wrong) {
+    close(); const q = st.ask, dir = A.thumbs || 'act/', img = typeof q.img === 'string' ? q.img : q.img !== false ? dir + 'p' + String(q.page).padStart(3, '0') + '.jpg' : '';
+    if (!document.getElementById('act-css')) { const s = document.createElement('style'); s.id = 'act-css';
+      s.textContent =
+        '#act-ov{position:fixed;inset:0;z-index:9998;background:rgba(8,7,6,.86);padding:14px;overflow:auto;display:flex}' +
+        '#act-box{background:var(--panel,#1e1c19);color:var(--fg,#f2eadb);border:1px solid var(--line,#34302a);border-radius:20px;max-width:520px;width:100%;margin:auto;padding:22px 20px 16px;box-shadow:0 20px 60px rgba(0,0,0,.6);font-family:var(--body,system-ui)}' +
+        '#act-box .eb{font:700 12px/1 var(--body,system-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent,#c9a25a);text-align:center}' +
+        '#act-box h2{font:700 34px/1 var(--display,system-ui);text-transform:uppercase;letter-spacing:.02em;margin:10px 0 16px;text-align:center}#act-box h2 span{display:block;color:var(--accent,#c9a25a);font-size:64px;line-height:.95;margin-top:2px}' +
+        '#act-wrong{background:#5a1f1a;color:#ffd9d2;border-radius:12px;padding:10px 12px;margin:0 0 14px;font-weight:700;text-align:center}' +
+        '#act-vis{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:center;background:#15130f;border-radius:16px;padding:14px}' +
+        '#act-th{position:relative;border-radius:6px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.5);background:#fff;aspect-ratio:621/810}' +
+        '#act-th img{display:block;width:100%;height:100%}' +
+        '#act-th i{position:absolute;border:3px solid var(--accent,#c9a25a);border-radius:5px;box-shadow:0 0 0 3px rgba(201,162,90,.35);animation:actp 1.4s ease-in-out infinite}' +
+        '#act-th b{position:absolute;background:var(--accent,#c9a25a);color:#121110;font:700 10px/1 var(--body,system-ui);padding:4px 6px;border-radius:5px;white-space:nowrap}' +
+        '@keyframes actp{50%{box-shadow:0 0 0 7px rgba(201,162,90,.15)}}' +
+        '#act-pg small{display:block;color:var(--muted,#8f8676);font-size:14px;line-height:1.3}' +
+        '#act-pg strong{display:block;font:700 34px/1 var(--display,system-ui);color:var(--fg,#f2eadb);text-transform:uppercase;margin:6px 0 4px}#act-pg .tip{margin-top:10px;color:var(--accent,#c9a25a)}' +
+        '#act-steps{list-style:none;margin:16px 0 4px;padding:0;display:grid;gap:10px}' +
+        '#act-steps li{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:center;font-size:16px;line-height:1.35}' +
+        '#act-steps li span{width:30px;height:30px;border-radius:50%;background:var(--accent,#c9a25a);color:#121110;font-weight:700;display:grid;place-items:center}' +
+        '#act-box .go{display:flex;align-items:center;justify-content:center;gap:10px;font:700 19px/1 var(--body,system-ui);padding:17px;border-radius:14px;border:0;background:var(--accent,#c9a25a);color:#121110;width:100%;margin-top:16px;cursor:pointer}' +
+        '#act-box .go svg{width:24px;height:24px;fill:currentColor}' +
+        '#act-box .lnk{display:block;margin:8px auto 0;background:none;border:0;color:var(--muted,#8f8676);font:500 14px var(--body,system-ui);padding:8px;cursor:pointer}' +
+        '#act-box .help{text-align:center;font-size:13px;color:var(--muted,#8f8676);margin:2px 0 0}' +
+        '@media (max-width:420px){#act-box{padding:18px 14px 12px}#act-vis{grid-template-columns:118px 1fr;gap:12px;padding:12px}#act-pg strong{font-size:28px}#act-box h2{font-size:28px;margin-bottom:12px}#act-box h2 span{font-size:54px}#act-steps li{font-size:15px}}';
+      document.head.appendChild(s); }
+    const B = q.box || (A.boxes || {})[q.page] || [71.7, 16, 11, 8.5], U = A.unit || 'Chapter';
+    const thumb = img ? '<div id="act-th"' + (A.aspect ? ' style="aspect-ratio:' + A.aspect + '"' : '') + '><img src="' + img + '" alt="Page ' + q.page + ' of your book" onerror="this.parentNode.style.display=\'none\'">' +
+      '<i style="left:' + B[0] + '%;top:' + B[1] + '%;width:' + B[2] + '%;height:' + B[3] + '%"></i>' +
+      '<b style="right:' + Math.max(3, 100 - B[0] - B[2]) + '%;top:' + (B[1] + B[3] + 2) + '%">SCAN THIS</b></div>' : '';
+    ov = document.createElement('div'); ov.id = 'act-ov';
+    ov.innerHTML = '<div id="act-box" role="dialog" aria-label="Activate your book">' +
+      '<div class="eb">One-time step · Activate your book</div><h2>Now scan<span>page ' + q.page + '</span></h2>' +
+      (wrong ? '<p id="act-wrong">That is a different code. Look for page ' + q.page + '.</p>' : '') +
+      '<div id="act-vis">' + thumb + '<div id="act-pg"><small>Page ' + q.page + ' is the first page of</small><strong>' + U + ' ' + q.ch + '</strong><small>' + q.title + '</small><small class="tip">The code is at the top, in the gold box.</small></div></div>' +
+      '<ol id="act-steps"><li><span>1</span><div>Open the book at page ' + q.page + '.</div></li>' +
+      '<li><span>2</span><div>Tap <b>Scan the code</b> below.</div></li>' +
+      '<li><span>3</span><div>Point the camera at the code in the gold box. Done: the whole book opens.</div></li></ol>' +
+      '<button type="button" class="go" data-a="scan"><svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>Scan the code</button>' +
+      '<button type="button" class="lnk" data-a="later">Not now</button>' +
+      '<p class="help">Only needed once on this device. Help: hello@dibidup.com</p></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.a === 'later') return close();
+      close(); if (window.camScanOpen) window.camScanOpen(); else if (fileIn) fileIn.click(); });
+  }
+})();
+
+window.CAMSCAN_CFG = {onCode: t => (window.ACT_SCANNED || handleCode)(t)};
 
 // ---------------- escáner con la cámara del ordenador ----------------
 // En móvil y tableta, «Scan a code» abre la cámara del sistema (foto) como siempre.

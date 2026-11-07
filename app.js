@@ -618,3 +618,89 @@ let _rz = null;
 if ('serviceWorker' in navigator && /^https:$/.test(location.protocol) && !/claude|claudeusercontent/.test(location.hostname)) navigator.serviceWorker.register('sw.js').catch(() => {});
 // guitarra: al girar el móvil, se recoloca la partitura (2 compases por línea en vertical)
 if (MODE !== 'bass') { let wasN = innerWidth < 700; addEventListener('resize', () => { const n = innerWidth < 700; if (n !== wasN && !playing && $('score')) { wasN = n; drawScore(); } }); }
+
+window.CAMSCAN_CFG = {onCode: t => handleCode(t)};
+
+// ---------------- escáner con la cámara del ordenador ----------------
+// En móvil y tableta, «Scan a code» abre la cámara del sistema (foto) como siempre.
+// En ordenador abre la webcam en directo y lee el código en cuanto aparece; si no hay
+// cámara o se deniega el permiso, ofrece elegir una foto del código.
+(function () {
+  const CFG = window.CAMSCAN_CFG || {};
+  const ua = navigator.userAgent || '';
+  const phone = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const can = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof jsQR === 'function';
+  if (phone || !can) return;
+  const fileInput = () => document.getElementById(CFG.input || 'cam');
+  let ov = null, stream = null, raf = 0, busy = false;
+  function css() {
+    if (document.getElementById('cs-css')) return;
+    const s = document.createElement('style'); s.id = 'cs-css';
+    s.textContent = '#cs-ov{position:fixed;inset:0;z-index:9999;background:rgba(10,12,16,.92);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit}' +
+      '#cs-box{background:#fff;color:#1a1d24;border-radius:14px;max-width:560px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center}' +
+      '#cs-box h2{margin:0 0 6px;font-size:20px}#cs-box p{margin:6px 0 12px;font-size:15px;line-height:1.4;color:#3a3f4a}' +
+      '#cs-vw{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3}' +
+      '#cs-vw video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}' +
+      '#cs-vw i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}' +
+      '#cs-st{min-height:20px;font-size:14px;margin:10px 0 4px;color:#3a3f4a}' +
+      '#cs-bt{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}' +
+      '#cs-bt button{font:inherit;font-size:15px;padding:10px 16px;border-radius:10px;border:1px solid #c9ced8;background:#f3f5f8;color:#1a1d24;cursor:pointer}' +
+      '#cs-bt button.pri{background:#1a1d24;color:#fff;border-color:#1a1d24}';
+    document.head.appendChild(s);
+  }
+  function close() {
+    cancelAnimationFrame(raf); raf = 0;
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    if (ov) { ov.remove(); ov = null; }
+  }
+  function photo() { close(); const i = fileInput(); if (i) i.click(); }
+  function status(t) { const e = document.getElementById('cs-st'); if (e) e.textContent = t; }
+  async function open() {
+    if (ov) return; css();
+    ov = document.createElement('div'); ov.id = 'cs-ov';
+    ov.innerHTML = '<div id="cs-box" role="dialog" aria-label="Scan a code"><h2>Scan a code</h2>' +
+      '<p>Hold the book in front of your computer’s camera, with the code inside the frame. Keep it still for a moment.</p>' +
+      '<div id="cs-vw"><video playsinline muted></video><i></i></div><div id="cs-st">Starting the camera…</div>' +
+      '<div id="cs-bt"><button type="button" data-a="photo">Use a photo of the code</button><button type="button" class="pri" data-a="close">Cancel</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { const a = e.target.closest('button') && e.target.closest('button').dataset.a; if (a === 'close') close(); else if (a === 'photo') photo(); else if (e.target === ov) close(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
+    const v = ov.querySelector('video');
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {width: {ideal: 1920}, height: {ideal: 1080}, facingMode: 'user'}});
+    } catch (e) {
+      status(e && e.name === 'NotAllowedError' ? 'The camera is blocked. Allow it in your browser (the camera icon in the address bar), or use a photo of the code.' : 'No camera was found on this computer. You can use a photo of the code instead.');
+      const vw = document.getElementById('cs-vw'); if (vw) vw.style.display = 'none'; return;
+    }
+    if (!ov) { stream.getTracks().forEach(t => t.stop()); stream = null; return; }
+    v.srcObject = stream; try { await v.play(); } catch (e) {}
+    status('Looking for the code…');
+    const cv = document.createElement('canvas'), cx = cv.getContext('2d', {willReadFrequently: true});
+    let last = 0, n = 0;
+    const tick = async t => {
+      if (!ov) return; raf = requestAnimationFrame(tick);
+      if (busy || t - last < 120 || !v.videoWidth) return; last = t; n++;
+      const W = v.videoWidth, H = v.videoHeight;
+      // tres pasadas alternas: marco completo, centro ampliado y centro más ampliado
+      // (la webcam da poco detalle: ampliar el centro suaviza el ruido y agranda los módulos del código)
+      const P = [[0, 1, 1280], [0.2, 0.6, 1400], [0.3, 0.4, 1200]][n % 3];
+      const sx = W * P[0], sy = H * P[0], sw = W * P[1], sh = H * P[1];
+      const k = P[2] / Math.max(sw, sh); cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
+      cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+      cx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+      let r = null; try { r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, {inversionAttempts: 'dontInvert'}); } catch (e) {}
+      if (r && r.data) {
+        busy = true; status('Code found!');
+        const data = r.data; close();
+        try { await CFG.onCode(data); } finally { busy = false; }
+      }
+    };
+    raf = requestAnimationFrame(tick);
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('input')) return;   // el clic que abre el selector de fotos (input dentro de la etiqueta)
+    const b = e.target.closest(CFG.trigger || 'label[for="cam"]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation(); open();
+  }, true);
+  window.camScanOpen = open;
+})();

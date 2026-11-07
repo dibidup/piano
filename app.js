@@ -70,7 +70,6 @@ const MORE_BOOKS = [
   {id: 'guitar', t: 'Guitar Grooves for Every Style', d: '527 guitar parts in notation and TAB, 16 styles.', img: '714mbPBKc5L', asin: 'B0HQ13N24B'},
   {id: 'bass', t: 'Bass Grooves for Every Style', d: '523 bass lines in notation and TAB, with slap.', img: null, asin: null},
   {id: 'read', t: 'Learn to Read Music in a Month', d: 'Read sheet music from scratch in 30 days.', img: '71qFEW194pL', asin: 'B0HP8NTHB8', asinIntl: 'B0HMX7DY9M'},
-  {id: 'harm', t: 'Teoría y armonía moderna para autodidactas', d: 'Spanish edition: harmony for self-taught musicians.', img: '61Ihk9-COfL', asin: 'B0HNP1JXXF', only: ['es']}
 ];
 function amazonStore() {
   let tz = '', lang = '';

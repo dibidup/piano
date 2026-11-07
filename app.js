@@ -75,14 +75,14 @@ function amazonStore() {
   let tz = '', lang = '';
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
   try { lang = (navigator.languages || [navigator.language]).join(',').toLowerCase(); } catch (e) {}
-  const TZ = {'Europe/Madrid': 'es', 'Atlantic/Canary': 'es', 'Africa/Ceuta': 'es', 'Europe/Berlin': 'de', 'Europe/Vienna': 'de', 'Europe/Zurich': 'de', 'Europe/Busingen': 'de',
-    'Europe/Paris': 'fr', 'Europe/Brussels': 'fr', 'Europe/Luxembourg': 'fr', 'Europe/Monaco': 'fr', 'Europe/Rome': 'it', 'Europe/San_Marino': 'it', 'Europe/Vatican': 'it',
-    'Europe/London': 'uk', 'Europe/Dublin': 'uk', 'Europe/Amsterdam': 'nl', 'Asia/Tokyo': 'jp'};
+  const TZ = {'Europe/Madrid': 'es', 'Europe/Lisbon': 'es', 'Atlantic/Madeira': 'es', 'Atlantic/Azores': 'es', 'Europe/Warsaw': 'pl', 'Europe/Stockholm': 'se', 'Atlantic/Canary': 'es', 'Africa/Ceuta': 'es', 'Europe/Berlin': 'de', 'Europe/Vienna': 'de', 'Europe/Zurich': 'de', 'Europe/Busingen': 'de',
+    'Europe/Paris': 'fr', 'Europe/Brussels': 'be', 'Europe/Luxembourg': 'fr', 'Europe/Monaco': 'fr', 'Europe/Rome': 'it', 'Europe/San_Marino': 'it', 'Europe/Vatican': 'it',
+    'Europe/London': 'uk', 'Europe/Dublin': 'ie', 'Europe/Amsterdam': 'nl', 'Asia/Tokyo': 'jp'};
   let s = TZ[tz];
   if (!s && /^Australia\//.test(tz)) s = 'au';
   if (!s && /^America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Montreal|Moncton|Whitehorse|Yellowknife|Iqaluit)$/.test(tz)) s = 'ca';
-  if (!s) { const m = lang.match(/\b(en-gb|en-ie|es-es|de|fr-fr|it|nl-nl|ja)\b/); s = m ? {'en-gb': 'uk', 'en-ie': 'uk', 'es-es': 'es', de: 'de', 'fr-fr': 'fr', it: 'it', 'nl-nl': 'nl', ja: 'jp'}[m[1]] : 'us'; }
-  const DOM = {us: 'amazon.com', uk: 'amazon.co.uk', es: 'amazon.es', de: 'amazon.de', fr: 'amazon.fr', it: 'amazon.it', nl: 'amazon.nl', jp: 'amazon.co.jp', ca: 'amazon.ca', au: 'amazon.com.au'};
+  if (!s) { const m = lang.match(/\b(en-gb|en-ie|es-es|pt-pt|fr-be|nl-be|de|fr-fr|it|nl-nl|pl|sv|ja)\b/); s = m ? {'en-gb': 'uk', 'en-ie': 'ie', 'pt-pt': 'es', 'fr-be': 'be', 'nl-be': 'be', pl: 'pl', sv: 'se', 'es-es': 'es', de: 'de', 'fr-fr': 'fr', it: 'it', 'nl-nl': 'nl', ja: 'jp'}[m[1]] : 'us'; }
+  const DOM = {us: 'amazon.com', uk: 'amazon.co.uk', es: 'amazon.es', de: 'amazon.de', fr: 'amazon.fr', it: 'amazon.it', nl: 'amazon.nl', jp: 'amazon.co.jp', ca: 'amazon.ca', au: 'amazon.com.au', ie: 'amazon.ie', be: 'amazon.com.be', pl: 'amazon.pl', se: 'amazon.se'};
   return {s, dom: DOM[s]};
 }
 function moreBooks() {

@@ -68,7 +68,7 @@ const MORE_BOOKS = [
   {id: 'drums', t: 'Drum Grooves for Every Style', d: '1,180 grooves and 152 fills in 35+ styles.', img: '61xa6mcngHL', asin: 'B0HP8SHVFF'},
   {id: 'piano', t: 'Piano Grooves for Every Style', d: '508 patterns for both hands in 16 styles.', img: '71A6UwegwTL', asin: 'B0HPZWMLG2'},
   {id: 'guitar', t: 'Guitar Grooves for Every Style', d: '527 guitar parts in notation and TAB, 16 styles.', img: '714mbPBKc5L', asin: 'B0HQ13N24B'},
-  {id: 'bass', t: 'Bass Grooves for Every Style', d: '523 bass lines in notation and TAB, with slap.', img: null, asin: null},
+  {id: 'bass', t: 'Bass Grooves for Every Style', d: '512 bass lines in notation and TAB, with slap.', img: '71Oj17lKJXL', asin: 'B0HQWDLC6S'},
   {id: 'read', t: 'Learn to Read Music in a Month', d: 'Read sheet music from scratch in 30 days.', img: '71qFEW194pL', asin: 'B0HP8NTHB8', asinIntl: 'B0HMX7DY9M'},
 ];
 function amazonStore() {

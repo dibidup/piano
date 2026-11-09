@@ -712,15 +712,15 @@ window.ACT_CFG = {"book": "piano", "store": "pg-codes", "thumbs": "act/", "boxes
 window.CAMSCAN_CFG = {onCode: t => (window.ACT_SCANNED || handleCode)(t)};
 
 // ---------------- escáner con la cámara del ordenador ----------------
-// En móvil y tableta, «Scan a code» abre la cámara del sistema (foto) como siempre.
-// En ordenador abre la webcam en directo y lee el código en cuanto aparece; si no hay
-// cámara o se deniega el permiso, ofrece elegir una foto del código.
+// Lee el código en directo con la cámara (la trasera en el móvil, la webcam en el ordenador), en cuanto aparece,
+// como la cámara del sistema; si no hay cámara o se deniega el permiso, ofrece hacer o elegir una foto del código.
 (function () {
   const CFG = window.CAMSCAN_CFG || {};
   const ua = navigator.userAgent || '';
   const phone = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const can = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof jsQR === 'function';
-  if (phone || !can) return;
+  if (!can) return;
+  const dbg = t => (window.CAMSCAN_DBG || (() => {}))(t);
   const fileInput = () => document.getElementById(CFG.input || 'cam');
   let ov = null, stream = null, raf = 0, busy = false;
   function css() {
@@ -730,7 +730,7 @@ window.CAMSCAN_CFG = {onCode: t => (window.ACT_SCANNED || handleCode)(t)};
       '#cs-box{background:#fff;color:#1a1d24;border-radius:14px;max-width:560px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center}' +
       '#cs-box h2{margin:0 0 6px;font-size:20px}#cs-box p{margin:6px 0 12px;font-size:15px;line-height:1.4;color:#3a3f4a}' +
       '#cs-vw{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3}' +
-      '#cs-vw video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}' +
+      '#cs-vw video{width:100%;height:100%;object-fit:cover;' + (phone ? '' : 'transform:scaleX(-1);') + 'display:block}' +
       '#cs-vw i{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.9);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}' +
       '#cs-st{min-height:20px;font-size:14px;margin:10px 0 4px;color:#3a3f4a}' +
       '#cs-bt{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}' +
@@ -749,22 +749,23 @@ window.CAMSCAN_CFG = {onCode: t => (window.ACT_SCANNED || handleCode)(t)};
     if (ov) return; css();
     ov = document.createElement('div'); ov.id = 'cs-ov';
     ov.innerHTML = '<div id="cs-box" role="dialog" aria-label="Scan a code"><h2>Scan a code</h2>' +
-      '<p>Hold the book in front of your computer’s camera, with the code inside the frame. Keep it still for a moment.</p>' +
+      '<p>' + (phone ? 'Point the camera at the code, inside the frame. It is read automatically.' : 'Hold the book in front of your computer’s camera, with the code inside the frame. Keep it still for a moment.') + '</p>' +
       '<div id="cs-vw"><video playsinline muted></video><i></i></div><div id="cs-st">Starting the camera…</div>' +
-      '<div id="cs-bt"><button type="button" data-a="photo">Use a photo of the code</button><button type="button" class="pri" data-a="close">Cancel</button></div></div>';
+      '<div id="cs-bt"><button type="button" data-a="photo">' + (phone ? 'Take a photo instead' : 'Use a photo of the code') + '</button><button type="button" class="pri" data-a="close">Cancel</button></div></div>';
     document.body.appendChild(ov);
     ov.addEventListener('click', e => { const a = e.target.closest('button') && e.target.closest('button').dataset.a; if (a === 'close') close(); else if (a === 'photo') photo(); else if (e.target === ov) close(); });
     document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
     const v = ov.querySelector('video');
     try {
-      stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {width: {ideal: 1920}, height: {ideal: 1080}, facingMode: 'user'}});
+      stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {width: {ideal: 1920}, height: {ideal: 1080}, facingMode: phone ? {ideal: 'environment'} : 'user'}});
     } catch (e) {
       status(e && e.name === 'NotAllowedError' ? 'The camera is blocked. Allow it in your browser (the camera icon in the address bar), or use a photo of the code.' : 'No camera was found on this computer. You can use a photo of the code instead.');
       const vw = document.getElementById('cs-vw'); if (vw) vw.style.display = 'none'; return;
     }
     if (!ov) { stream.getTracks().forEach(t => t.stop()); stream = null; return; }
     v.srcObject = stream; try { await v.play(); } catch (e) {}
-    status('Looking for the code…');
+    status('Looking for the code…'); dbg('camera on ' + v.videoWidth + 'x' + v.videoHeight);
+    let BD = null; try { if ('BarcodeDetector' in window && (await BarcodeDetector.getSupportedFormats()).includes('qr_code')) BD = new BarcodeDetector({formats: ['qr_code']}); } catch (e) {}
     const cv = document.createElement('canvas'), cx = cv.getContext('2d', {willReadFrequently: true});
     let last = 0, n = 0;
     const tick = async t => {
@@ -778,10 +779,11 @@ window.CAMSCAN_CFG = {onCode: t => (window.ACT_SCANNED || handleCode)(t)};
       const k = P[2] / Math.max(sw, sh); cv.width = Math.round(sw * k); cv.height = Math.round(sh * k);
       cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
       cx.drawImage(v, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-      let r = null; try { r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, {inversionAttempts: 'dontInvert'}); } catch (e) {}
+      let r = null; if (BD && n % 2) { busy = true; try { const d = await BD.detect(v); if (d && d.length && d[0].rawValue) r = {data: d[0].rawValue}; } catch (e) {} busy = false; if (!ov) return; }
+      if (!r) try { r = jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, {inversionAttempts: 'dontInvert'}); } catch (e) {}
       if (r && r.data) {
         busy = true; status('Code found!');
-        const data = r.data; close();
+        const data = r.data; close(); dbg('read: ' + data.slice(0, 60));
         try { await CFG.onCode(data); } finally { busy = false; }
       }
     };
